@@ -6,10 +6,10 @@ const defaultPort = 8080
 
 const args = parse(Deno.args, {
   alias: {
-    'port': 'p'
+    'p': 'port'
   }
 })
-let port = Number(args.p)
+let port = Number(args.port)
 if (!Number.isInteger(port)) {
   console.log(`Using default port: ${defaultPort}`)
   port = defaultPort
