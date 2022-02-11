@@ -1,6 +1,5 @@
-import { parse } from "https://deno.land/std@0.98.0/flags/mod.ts"
-import { serve } from "https://deno.land/std@0.98.0/http/server.ts"
-import { readAll } from "https://deno.land/std@0.98.0/io/util.ts"
+import { parse } from "https://deno.land/std@0.125.0/flags/mod.ts"
+import { Server } from "https://deno.land/std@0.125.0/http/server.ts"
 
 const defaultPort = 8080
 
@@ -15,33 +14,36 @@ if (!Number.isInteger(port)) {
   port = defaultPort
 }
 
-const server = serve({port});
-console.log(`Running at ${port}`);
-
-[Deno.Signal.SIGTERM, Deno.Signal.SIGINT].forEach(
-  sig => {
-    Deno.signal(sig).then(() => {
-      console.log(`Signal ${sig.toString()} recieved. Shutdown...`)
-      Deno.exit(0)
-    })
-  }
-)
-
-for await (const request of server) {
+const handler = async (request: Request) => {
   console.log(`URL: ${request.url}`)
   console.log(`Method: ${request.method}`)
   console.log('Headers:')
   request.headers.forEach((v, k, _) => {
     console.log(`- ${k}: ${v}`)
   })
-  console.log(`Body: ${new TextDecoder().decode(await readAll(request.body))}`)
+  console.log(`Body: ${await request.text()}`)
 
   const respHeaders = new Headers()
   respHeaders.append('Content-Type', 'text/plain')
 
-  request.respond({
+  return new Response('OK', {
     status: 200,
     headers: respHeaders,
-    body: 'OK'
   })
 }
+
+const server = new Server({ port, handler });
+
+const shutdown = () => {
+  console.log('shutdown triggered')
+  setTimeout(() => {
+    server.close()
+    console.log('server closed')
+  }, 1000)
+}
+
+Deno.addSignalListener('SIGINT', shutdown)
+Deno.addSignalListener('SIGTERM', shutdown)
+
+server.listenAndServe()
+console.log(`Running at ${port}`);
