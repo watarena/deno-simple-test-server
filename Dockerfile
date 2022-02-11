@@ -24,3 +24,4 @@ COPY --from=0 /etc/passwd /etc/passwd
 COPY --from=0 /empty /home/simple-test-server/.cache/deno/gen
 
 ENTRYPOINT [ "/simple-test-server" ]
+USER simple-test-server

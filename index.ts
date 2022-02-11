@@ -1,11 +1,10 @@
 import { parse } from "https://deno.land/std@0.125.0/flags/mod.ts"
-import { Server } from "https://deno.land/std@0.125.0/http/server.ts"
 
 const defaultPort = 8080
 
 const args = parse(Deno.args, {
   alias: {
-    'p': 'port'
+    'p': 'port',
   }
 })
 let port = Number(args.port)
@@ -14,36 +13,54 @@ if (!Number.isInteger(port)) {
   port = defaultPort
 }
 
-const handler = async (request: Request) => {
-  console.log(`URL: ${request.url}`)
-  console.log(`Method: ${request.method}`)
-  console.log('Headers:')
-  request.headers.forEach((v, k, _) => {
-    console.log(`- ${k}: ${v}`)
-  })
-  console.log(`Body: ${await request.text()}`)
+const listener = Deno.listen({ port })
 
-  const respHeaders = new Headers()
-  respHeaders.append('Content-Type', 'text/plain')
+let connCount = 0
+let httpConnCount = 0
 
-  return new Response('OK', {
-    status: 200,
-    headers: respHeaders,
-  })
+let serverClosed = false
+
+const signals: Deno.Signal[] = ['SIGINT', 'SIGTERM']
+signals.forEach((sig) => {
+    Deno.addSignalListener(sig, () => {
+        console.log(`signal ${sig} recieved`)
+        serverClosed = true
+        listener.close()
+    })
+})
+
+console.log(`Running at ${port}`)
+
+while (true) {
+    try {
+        const conn = await listener.accept()
+        console.log(`new conn: ${connCount++}`)
+        httpConnCount = 0;
+        (async () => {
+            const httpConn = Deno.serveHttp(conn);
+            for await (const requestEvent of httpConn) {
+                console.log(`new http conn: ${httpConnCount++}`)
+
+                const { request } = requestEvent
+                console.log(`URL: ${request.url}`)
+                console.log(`Method: ${request.method}`)
+                console.log('Headers:')
+                request.headers.forEach((v, k, _) => {
+                  console.log(`- ${k}: ${v}`)
+                })
+                console.log(`Body: ${await request.text()}`)
+
+                requestEvent.respondWith(new Response('OK', {status: 200}))
+            }
+        })().catch((err) => {
+            console.log(`httpConn error: ${err}`)
+        });
+    } catch (err) {
+        if (serverClosed) {
+            break
+        }
+        console.log(`conn error: ${err}`)
+    }
 }
 
-const server = new Server({ port, handler });
-
-const shutdown = () => {
-  console.log('shutdown triggered')
-  setTimeout(() => {
-    server.close()
-    console.log('server closed')
-  }, 1000)
-}
-
-Deno.addSignalListener('SIGINT', shutdown)
-Deno.addSignalListener('SIGTERM', shutdown)
-
-server.listenAndServe()
-console.log(`Running at ${port}`);
+console.log('shutdown server...')
