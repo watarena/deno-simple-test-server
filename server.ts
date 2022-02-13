@@ -1,4 +1,4 @@
-import { parse } from "https://deno.land/std@0.125.0/flags/mod.ts"
+import { parse, log } from "./deps.ts"
 
 const defaultPort = 8080
 
@@ -9,7 +9,7 @@ const args = parse(Deno.args, {
 })
 let port = Number(args.port)
 if (!Number.isInteger(port)) {
-  console.log(`Using default port: ${defaultPort}`)
+  log.info(`Using default port: ${defaultPort}`)
   port = defaultPort
 }
 
@@ -29,38 +29,44 @@ signals.forEach((sig) => {
     })
 })
 
-console.log(`Running at ${port}`)
+log.info(`Running at ${port}`)
+
+function logRequest(url: string, method: string, headers: string[], body: string): string {
+    return `--- Request ---
+URL: ${url}
+Method: ${method}
+Headers
+${headers.join('\n')}
+Body
+${body}
+---`
+}
 
 while (true) {
     try {
         const conn = await listener.accept()
-        console.log(`new conn: ${connCount++}`)
+        log.info(`new conn: ${connCount++}`)
         httpConnCount = 0;
         (async () => {
             const httpConn = Deno.serveHttp(conn);
             for await (const requestEvent of httpConn) {
-                console.log(`new http conn: ${httpConnCount++}`)
+                log.info(`new http conn: ${httpConnCount++}`)
 
                 const { request } = requestEvent
-                console.log(`URL: ${request.url}`)
-                console.log(`Method: ${request.method}`)
-                console.log('Headers:')
-                request.headers.forEach((v, k, _) => {
-                  console.log(`- ${k}: ${v}`)
-                })
-                console.log(`Body: ${await request.text()}`)
+                const headers = Array.from(request.headers.entries()).map(([key, value]) => `- ${key}: ${value}`)
+                log.info(logRequest(request.url, request.method, headers, await request.text()))
 
                 requestEvent.respondWith(new Response('OK', {status: 200}))
             }
         })().catch((err) => {
-            console.log(`httpConn error: ${err}`)
+            log.error(err)
         });
     } catch (err) {
         if (serverClosed) {
             break
         }
-        console.log(`conn error: ${err}`)
+        log.error(err)
     }
 }
 
-console.log('shutdown server...')
+log.info('shutdown server...')
