@@ -5,15 +5,37 @@ const defaultPort = 8080
 const args = parse(Deno.args, {
   alias: {
     'p': 'port',
+    'u': 'unix-socket',
   }
 })
-let port = Number(args.port)
-if (!Number.isInteger(port)) {
-  log.info(`Using default port: ${defaultPort}`)
-  port = defaultPort
+let port: number | null = null
+let unixSocket: string | null = null
+
+if (args.p) {
+    if (typeof args.p !== 'number') {
+        log.critical(`Invalid port: ${args.p}`)
+    }
+    port = args.p
+}
+if (args.u) {
+    unixSocket = args.u.toString()
 }
 
-const listener = Deno.listen({ port })
+if (port != null && unixSocket != null) {
+    log.critical('Cannot use both -p (--port) and -u (--unix-socket)')
+}
+
+let listener: Deno.Listener
+if (unixSocket != null) {
+    listener = Deno.listen({ path: unixSocket, transport: 'unix' })
+    log.info(`Running at ${unixSocket}`)
+} else {
+    if (!port) {
+        port = defaultPort
+    }
+    listener = Deno.listen({ port, transport: 'tcp' })
+    log.info(`Running at ${port}`)
+}
 
 let connCount = 0
 let httpConnCount = 0
@@ -28,8 +50,6 @@ signals.forEach((sig) => {
         listener.close()
     })
 })
-
-log.info(`Running at ${port}`)
 
 async function logRequest(request: Request) {
     log.info(`--- Request ---
@@ -57,13 +77,13 @@ while (true) {
                 requestEvent.respondWith(new Response('OK', {status: 200}))
             }
         })().catch((err) => {
-            log.error(err)
+            log.error(`http conn error: ${err}`)
         });
     } catch (err) {
         if (serverClosed) {
             break
         }
-        log.error(err)
+        log.error(`conn error: ${err}`)
     }
 }
 
