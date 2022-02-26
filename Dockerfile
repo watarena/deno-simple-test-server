@@ -13,7 +13,7 @@ RUN useradd \
       -o /simple-test-server \
       --allow-net \
       --unstable \
-      index.ts
+      server.ts
 
 FROM scratch
 
