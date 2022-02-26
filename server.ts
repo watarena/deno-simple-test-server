@@ -31,15 +31,15 @@ signals.forEach((sig) => {
 
 log.info(`Running at ${port}`)
 
-function logRequest(url: string, method: string, headers: string[], body: string): string {
-    return `--- Request ---
-URL: ${url}
-Method: ${method}
+async function logRequest(request: Request) {
+    log.info(`--- Request ---
+URL: ${request.url}
+Method: ${request.method}
 Headers
-${headers.join('\n')}
+${Array.from(request.headers.entries()).map(([key, value]) => `- ${key}: ${value}`).join('\n')}
 Body
-${body}
----`
+${await request.text()}
+---`)
 }
 
 while (true) {
@@ -52,9 +52,7 @@ while (true) {
             for await (const requestEvent of httpConn) {
                 log.info(`new http conn: ${httpConnCount++}`)
 
-                const { request } = requestEvent
-                const headers = Array.from(request.headers.entries()).map(([key, value]) => `- ${key}: ${value}`)
-                log.info(logRequest(request.url, request.method, headers, await request.text()))
+                await(logRequest(requestEvent.request))
 
                 requestEvent.respondWith(new Response('OK', {status: 200}))
             }
