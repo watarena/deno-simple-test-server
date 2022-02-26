@@ -1,27 +1,23 @@
-FROM denoland/deno:latest
+FROM denoland/deno:1.19.0
 
 COPY . /tmp/simple-test-server
-RUN useradd \
-      -MU \
-      -s /usr/sbin/nologin \
-      -d /home/simple-test-server \
-      simple-test-server \
-    && \
-    mkdir /empty && \
-    cd /tmp/simple-test-server && \
-    deno compile \
+RUN deno compile \
       -o /simple-test-server \
       --allow-net \
+      --allow-read \
+      --allow-write \
       --unstable \
-      server.ts
+      /tmp/simple-test-server/server.ts && \
+    chmod 755 /simple-test-server
 
 FROM scratch
+
+WORKDIR /gen
+ENV DENO_DIR=/
 
 COPY --from=0 /lib /lib
 COPY --from=0 /lib64 /lib64
 COPY --from=0 /simple-test-server /simple-test-server
-COPY --from=0 /etc/passwd /etc/passwd
-COPY --from=0 /empty /home/simple-test-server/.cache/deno/gen
 
 ENTRYPOINT [ "/simple-test-server" ]
-USER simple-test-server
+USER 1000:1000
